@@ -2,102 +2,49 @@ package storages
 
 import (
 	"context"
-	"io"
 	"sync"
 	"time"
 )
 
 const (
-	readerChunkSz       int = 8 * 1024
-	readerChunkNumLimit int = 32 // * readerChunkSz = 256Kb
-	dataChunkSz         int = 1024 * 1024
+	dataChunkSz int = 1024 * 1024
 )
 
-var (
-	_ DataReader  = (*DataPool)(nil)
-	_ Maintenance = (*DataPool)(nil)
-)
-
-type DataPool struct {
+type dataPool struct {
 	sync.Mutex
 
-	readerPool memoryPool
-	valuePool  memoryPool
+	valuePool memoryPool
 
 	current      allocation
 	queueToClean queueToClean
 }
 
-func NewDataPool() (DataPool, error) {
+func newDataPool() (dataPool, error) {
 	valuePool := newMemoryPool(dataChunkSz)
+
 	buf, err := valuePool.Get()
 	if err != nil {
-		return DataPool{}, nil
+		return dataPool{}, err
 	}
 
-	return DataPool{
-		readerPool: newMemoryPool(readerChunkSz),
-		valuePool:  valuePool,
-		current:    newAllocation(buf),
+	return dataPool{
+		valuePool: valuePool,
+		current:   newAllocation(buf),
 	}, nil
 }
 
-func (o *DataPool) ReadValue(data io.Reader, expiration time.Time) ([]byte, error) {
-	dataBuf, index, sz, err := o.read(data)
+func (o *dataPool) Copy(data []byte, expiration time.Time) ([]byte, error) {
+	valueBuf, err := o.allocate(len(data), expiration)
 	if err != nil {
 		return nil, err
 	}
 
-	valueBuf, err := o.allocate(sz, expiration)
-	if err != nil {
-		return nil, err
-	}
-
-	o.copy(valueBuf, dataBuf, index)
+	copy(valueBuf, data)
 
 	return valueBuf, nil
 }
 
-func (o *DataPool) read(data io.Reader) ([readerChunkNumLimit][]byte, int, int, error) {
-	var (
-		dataBuf [readerChunkNumLimit][]byte
-		sz      int
-		index   int
-	)
-	defer func() {
-		for i := 0; i < index; i++ {
-			o.readerPool.Put(dataBuf[i])
-		}
-	}()
-
-	for index < readerChunkNumLimit {
-		buf, err := o.readerPool.Get()
-		if err != nil {
-			return dataBuf, 0, 0, err
-		}
-		read, err := data.Read(buf)
-		if err != nil {
-			return dataBuf, 0, 0, err
-		}
-
-		sz += read
-		dataBuf[index] = buf
-
-		if read < len(buf) {
-			break
-		}
-
-		index++
-	}
-
-	if index >= readerChunkNumLimit {
-		return dataBuf, 0, 0, ErrOutOfLimit
-	}
-
-	return dataBuf, index, sz, nil
-}
-
-func (o *DataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
+func (o *dataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
 	o.Lock()
 	defer o.Unlock()
 
@@ -124,15 +71,7 @@ func (o *DataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
 	return nil, ErrOutOfLimit
 }
 
-func (o *DataPool) copy(buf []byte, read [readerChunkNumLimit][]byte, index int) {
-	valueIndex := 0
-	for i := 0; i < index; i++ {
-		copy(buf[valueIndex:], read[i])
-		valueIndex += len(read[i])
-	}
-}
-
-func (o *DataPool) Clean(ctx context.Context) error {
+func (o *dataPool) Clean(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -150,6 +89,4 @@ func (o *DataPool) Clean(ctx context.Context) error {
 			node.buf = nil
 		}
 	}
-
-	return nil
 }

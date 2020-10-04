@@ -31,7 +31,7 @@ func (o *memoryPool) Get() ([]byte, error) {
 			}
 		}()
 
-		buf = o.Pool.Get().([]byte)
+		buf, _ = o.Pool.Get().([]byte)
 	}()
 
 	return buf, err

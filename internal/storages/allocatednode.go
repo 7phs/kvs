@@ -24,15 +24,12 @@ func (o *allocation) allocate(sz int, expiration time.Time) ([]byte, bool) {
 
 	index := o.index
 	o.index += sz
+
 	if o.expiration.Before(expiration) {
 		o.expiration = expiration
 	}
 
 	return o.buf[index:o.index], true
-}
-
-func (o *allocation) empty() bool {
-	return len(o.buf) == 0
 }
 
 type allocateInUse struct {
@@ -77,6 +74,7 @@ func (o *queueToClean) pop() (allocation, bool) {
 	if o.root == nil {
 		return allocation{}, false
 	}
+
 	if o.root.expiration.After(time.Now()) {
 		return allocation{}, false
 	}

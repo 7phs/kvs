@@ -1,7 +1,7 @@
 package storages
 
 import (
-	"io"
+	"context"
 	"time"
 
 	"github.com/7phs/kvs/internal/config"
@@ -13,22 +13,19 @@ var (
 )
 
 type Storages interface {
-	Add(key string, data io.Reader) error
-	Get(key string) ([]byte, error)
-}
-
-type DataReader interface {
-	ReadValue(data io.Reader, expiration time.Time) ([]byte, error)
+	Add(key, body []byte) error
+	Get(key []byte) ([]byte, error)
+	Clean(ctx context.Context) error
 }
 
 type DataDictionary interface {
 	Add(key uint64, data []byte, expiration time.Time) error
 	Get(key uint64) ([]byte, error)
+	Clean(ctx context.Context) error
 }
 
 type InMemStorages struct {
-	dataReader DataReader
-	dataDict   DataDictionary
+	dataDict DataDictionary
 
 	nonce   [32]byte
 	expired time.Duration
@@ -36,31 +33,28 @@ type InMemStorages struct {
 
 func NewInMemStorages(
 	config config.Config,
-	dataReader DataReader,
 	dataDict DataDictionary,
 ) (Storages, error) {
 	return &InMemStorages{
-		dataReader: dataReader,
-		dataDict:   dataDict,
-		expired:    config.Expiration(),
+		dataDict: dataDict,
+		expired:  config.Expiration(),
 	}, nil
 }
 
-func (o *InMemStorages) Add(key string, data io.Reader) error {
+func (o *InMemStorages) Add(key, body []byte) error {
 	expiration := time.Now().Add(o.expired)
 
-	value, err := o.dataReader.ReadValue(data, expiration)
-	if err != nil {
-		return err
-	}
-
-	return o.dataDict.Add(o.hash(key), value, expiration)
+	return o.dataDict.Add(o.hash(key), body, expiration)
 }
 
-func (o *InMemStorages) Get(key string) ([]byte, error) {
+func (o *InMemStorages) Get(key []byte) ([]byte, error) {
 	return o.dataDict.Get(o.hash(key))
 }
 
-func (o *InMemStorages) hash(key string) uint64 {
-	return highwayhash.Sum64([]byte(key), o.nonce[:])
+func (o *InMemStorages) Clean(ctx context.Context) error {
+	return o.dataDict.Clean(ctx)
+}
+
+func (o *InMemStorages) hash(key []byte) uint64 {
+	return highwayhash.Sum64(key, o.nonce[:])
 }

@@ -1,4 +1,4 @@
-package storages
+package server
 
 import (
 	"context"
@@ -17,8 +17,8 @@ type GroupMaintenance struct {
 	maintenanceList []Maintenance
 }
 
-func NewGroupMaintenance(logger *zap.Logger, m ...Maintenance) *GroupMaintenance {
-	return &GroupMaintenance{
+func NewGroupMaintenance(logger *zap.Logger, m ...Maintenance) GroupMaintenance {
+	return GroupMaintenance{
 		logger:          logger,
 		maintenanceList: m,
 	}
@@ -44,6 +44,7 @@ func (o *GroupMaintenance) Start(ctx context.Context, interval time.Duration) {
 
 			go func() {
 				defer wg.Done()
+
 				err := m.Clean(ctx)
 				if err != nil {
 					o.logger.Error("failed to maintenance",

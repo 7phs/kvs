@@ -13,9 +13,9 @@ func NewClient() KVS {
 }
 
 func (o *Client) Add(key, value string) error {
-
+	return nil
 }
 
 func (o *Client) Get(key string) (string, error) {
-
+	return "", nil
 }

@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
+	"log"
+	"os"
+	"os/signal"
+
 	"github.com/7phs/kvs/internal/config"
 	"github.com/7phs/kvs/internal/server"
 	"github.com/7phs/kvs/internal/storages"
 	"go.uber.org/zap"
-	"log"
-	"os"
-	"os/signal"
 )
 
 func main() {
@@ -21,7 +22,10 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to init logger: %w", err)
 	}
-	defer logger.Sync()
+
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	logger.Info("APP RUN")
 
@@ -31,31 +35,17 @@ func main() {
 		zap.Duration(config.MAINTENANCE, conf.Maintenance()),
 	)
 
-	logger.Info("init: data pool")
-
-	dataPool, err := storages.NewDataPool()
-	if err != nil {
-		logger.Fatal("failed to init data pool",
-			zap.Error(err),
-		)
-	}
-
 	logger.Info("init: data dictionary")
 
-	dataDictionary := storages.NewDataChunks()
-
-	logger.Info("init: maintainer")
-
-	maintainer := storages.NewGroupMaintenance(logger,
-		&dataPool,
-		&dataDictionary,
-	)
+	dataDictionary, err := storages.NewPartitionedDictionary()
+	if err != nil {
+		logger.Fatal("failed to init data dictionary")
+	}
 
 	logger.Info("init: storages")
 
 	storages, err := storages.NewInMemStorages(
 		conf,
-		&dataPool,
 		&dataDictionary,
 	)
 	if err != nil {
@@ -70,7 +60,6 @@ func main() {
 		logger,
 		conf,
 		storages,
-		maintainer,
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())

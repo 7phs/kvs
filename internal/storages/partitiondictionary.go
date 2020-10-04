@@ -5,6 +5,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -55,6 +57,7 @@ func (o *expiredList) Range(fn func(keys []uint64) bool) {
 		if o.clearedIndex > len(o.list) {
 			o.clearedIndex = 0
 			o.list = o.list[:0]
+
 			break
 		}
 	}
@@ -68,18 +71,30 @@ type record struct {
 type partition struct {
 	sync.RWMutex
 
+	pool    dataPool
 	data    map[uint64]record
 	expired expiredList
 }
 
-func newPartition() partition {
+func newPartition() (partition, error) {
+	pool, err := newDataPool()
+	if err != nil {
+		return partition{}, err
+	}
+
 	return partition{
+		pool:    pool,
 		data:    make(map[uint64]record, preAllocatedCap),
 		expired: newExpiredList(preAllocatedCap),
-	}
+	}, nil
 }
 
 func (o *partition) add(key uint64, value []byte, expiration time.Time) error {
+	value, err := o.pool.Copy(value, expiration)
+	if err != nil {
+		return err
+	}
+
 	o.Lock()
 	defer o.Unlock()
 
@@ -99,6 +114,7 @@ func (o *partition) get(key uint64) ([]byte, error) {
 	if !ok {
 		return nil, ErrKeyNotFound
 	}
+
 	if rec.expiration.Before(time.Now()) {
 		return rec.value, nil
 	}
@@ -108,58 +124,77 @@ func (o *partition) get(key uint64) ([]byte, error) {
 	return nil, ErrKeyNotFound
 }
 
-func (o *partition) clean(ctx context.Context) {
-	now := time.Now()
+func (o *partition) clean(ctx context.Context) error {
+	var (
+		wg  errgroup.Group
+		now = time.Now()
+	)
 
-	o.expired.Range(func(keys []uint64) bool {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-		}
+	wg.Go(func() error {
+		return o.pool.Clean(ctx)
+	})
 
-		prevK := uint64(0)
-
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i] < keys[j]
-		})
-
-		o.Lock()
-		defer o.Unlock()
-
-		for _, k := range keys {
-			if k != prevK {
-				if r, ok := o.data[k]; ok && r.expiration.Before(now) {
-					delete(o.data, k)
-				}
+	wg.Go(func() error {
+		o.expired.Range(func(keys []uint64) bool {
+			select {
+			case <-ctx.Done():
+				return false
+			default:
 			}
 
-			prevK = k
-		}
+			prevK := uint64(0)
 
-		return true
+			sort.Slice(keys, func(i, j int) bool {
+				return keys[i] < keys[j]
+			})
+
+			o.Lock()
+			defer o.Unlock()
+
+			for _, k := range keys {
+				if k != prevK {
+					if r, ok := o.data[k]; ok && r.expiration.Before(now) {
+						delete(o.data, k)
+					}
+				}
+
+				prevK = k
+			}
+
+			return true
+		})
+
+		return nil
 	})
+
+	return wg.Wait()
 }
 
-type PartitionedDataDictionary struct {
+type PartitionedDictionary struct {
 	partitions [partitionNum]partition
 }
 
-func NewDataChunks() PartitionedDataDictionary {
-	dict := PartitionedDataDictionary{}
+func NewPartitionedDictionary() (PartitionedDictionary, error) {
+	var (
+		dict = PartitionedDictionary{}
+		err  error
+	)
 
 	for i := range dict.partitions {
-		dict.partitions[i] = newPartition()
+		dict.partitions[i], err = newPartition()
+		if err != nil {
+			return dict, err
+		}
 	}
 
-	return dict
+	return dict, nil
 }
 
-func (o *PartitionedDataDictionary) Add(key uint64, value []byte, expiration time.Time) error {
+func (o *PartitionedDictionary) Add(key uint64, value []byte, expiration time.Time) error {
 	return o.partitions[chunkKey(key)].add(key, value, expiration)
 }
 
-func (o *PartitionedDataDictionary) Get(key uint64) ([]byte, error) {
+func (o *PartitionedDictionary) Get(key uint64) ([]byte, error) {
 	return o.partitions[chunkKey(key)].get(key)
 }
 
@@ -167,7 +202,7 @@ func chunkKey(key uint64) int {
 	return int(key / divider)
 }
 
-func (o *PartitionedDataDictionary) Clean(ctx context.Context) error {
+func (o *PartitionedDictionary) Clean(ctx context.Context) error {
 	for i := 0; i < len(o.partitions); i++ {
 		select {
 		case <-ctx.Done():
@@ -175,7 +210,10 @@ func (o *PartitionedDataDictionary) Clean(ctx context.Context) error {
 		default:
 		}
 
-		o.partitions[i].clean(ctx)
+		err := o.partitions[i].clean(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
