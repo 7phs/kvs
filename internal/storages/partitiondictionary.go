@@ -71,7 +71,7 @@ type record struct {
 type partition struct {
 	sync.RWMutex
 
-	pool    dataPool
+	pool    *dataPool
 	data    map[uint64]record
 	expired expiredList
 }
@@ -115,7 +115,7 @@ func (o *partition) get(key uint64) ([]byte, error) {
 		return nil, ErrKeyNotFound
 	}
 
-	if rec.expiration.Before(time.Now()) {
+	if rec.expiration.After(time.Now()) {
 		return rec.value, nil
 	}
 
@@ -174,7 +174,7 @@ type PartitionedDictionary struct {
 	partitions [partitionNum]partition
 }
 
-func NewPartitionedDictionary() (PartitionedDictionary, error) {
+func NewPartitionedDictionary() (*PartitionedDictionary, error) {
 	var (
 		dict = PartitionedDictionary{}
 		err  error
@@ -183,11 +183,11 @@ func NewPartitionedDictionary() (PartitionedDictionary, error) {
 	for i := range dict.partitions {
 		dict.partitions[i], err = newPartition()
 		if err != nil {
-			return dict, err
+			return nil, err
 		}
 	}
 
-	return dict, nil
+	return &dict, nil
 }
 
 func (o *PartitionedDictionary) Add(key uint64, value []byte, expiration time.Time) error {

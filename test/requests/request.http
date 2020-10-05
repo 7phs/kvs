@@ -1,0 +1,7 @@
+POST http://localhost:9889/test/key
+Content-Type: application/json
+
+{"hello": "world"}
+
+###
+GET http://localhost:9889/test/key

@@ -13,6 +13,7 @@ var (
 )
 
 type Storages interface {
+	ID() string
 	Add(key, body []byte) error
 	Get(key []byte) ([]byte, error)
 	Clean(ctx context.Context) error
@@ -39,6 +40,10 @@ func NewInMemStorages(
 		dataDict: dataDict,
 		expired:  config.Expiration(),
 	}, nil
+}
+
+func (o *InMemStorages) ID() string {
+	return "in-memory-storages"
 }
 
 func (o *InMemStorages) Add(key, body []byte) error {

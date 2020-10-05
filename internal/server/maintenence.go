@@ -9,6 +9,7 @@ import (
 )
 
 type Maintenance interface {
+	ID() string
 	Clean(ctx context.Context) error
 }
 
@@ -45,12 +46,26 @@ func (o *GroupMaintenance) Start(ctx context.Context, interval time.Duration) {
 			go func() {
 				defer wg.Done()
 
+				o.logger.Info("clean: start",
+					zap.String("id", m.ID()),
+				)
+
+				start := time.Now()
+
 				err := m.Clean(ctx)
 				if err != nil {
-					o.logger.Error("failed to maintenance",
+					o.logger.Error("failed to clean",
+						zap.String("id", m.ID()),
 						zap.Error(err),
 					)
+
+					return
 				}
+
+				o.logger.Info("clean: finish",
+					zap.Duration("duration", time.Since(start)),
+					zap.String("id", m.ID()),
+				)
 			}()
 		}
 

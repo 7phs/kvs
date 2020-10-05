@@ -13,21 +13,21 @@ const (
 type dataPool struct {
 	sync.Mutex
 
-	valuePool memoryPool
+	valuePool *memoryPool
 
 	current      allocation
 	queueToClean queueToClean
 }
 
-func newDataPool() (dataPool, error) {
+func newDataPool() (*dataPool, error) {
 	valuePool := newMemoryPool(dataChunkSz)
 
 	buf, err := valuePool.Get()
 	if err != nil {
-		return dataPool{}, err
+		return nil, err
 	}
 
-	return dataPool{
+	return &dataPool{
 		valuePool: valuePool,
 		current:   newAllocation(buf),
 	}, nil

@@ -8,8 +8,8 @@ type memoryPool struct {
 	sync.Pool
 }
 
-func newMemoryPool(sz int) memoryPool {
-	return memoryPool{
+func newMemoryPool(sz int) *memoryPool {
+	return &memoryPool{
 		Pool: sync.Pool{
 			New: func() interface{} {
 				return make([]byte, sz)
@@ -37,6 +37,7 @@ func (o *memoryPool) Get() ([]byte, error) {
 	return buf, err
 }
 
+//nolint:staticcheck
 func (o *memoryPool) Put(d []byte) {
 	o.Pool.Put(d)
 }

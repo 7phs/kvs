@@ -12,6 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	errExitCode = 2
+)
+
 func main() {
 	conf, err := config.NewConfigFromEnv()
 	if err != nil {
@@ -46,7 +50,7 @@ func main() {
 
 	storages, err := storages.NewInMemStorages(
 		conf,
-		&dataDictionary,
+		dataDictionary,
 	)
 	if err != nil {
 		logger.Fatal("failed to init data pool",
@@ -83,7 +87,7 @@ func main() {
 			logger.Fatal("failed to start server",
 				zap.Error(err),
 			)
-			os.Exit(2)
+			os.Exit(errExitCode)
 		}
 	}()
 
