@@ -41,16 +41,20 @@ func main() {
 
 	logger.Info("init: data dictionary")
 
-	dataDictionary, err := storages.NewPartitionedDictionary()
+	dictionary, err := storages.NewPartitionedDictionary()
 	if err != nil {
 		logger.Fatal("failed to init data dictionary")
 	}
+	//dictionary, err := storages.NewMapDictionary()
+	//if err != nil {
+	//	logger.Fatal("failed to init data dictionary")
+	//}
 
 	logger.Info("init: storages")
 
 	storages, err := storages.NewInMemStorages(
 		conf,
-		dataDictionary,
+		dictionary,
 	)
 	if err != nil {
 		logger.Fatal("failed to init data pool",

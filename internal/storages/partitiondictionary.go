@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	partitionNum      uint64 = 16
-	maxUint64                = ^uint64(0)
-	divider                  = maxUint64 / partitionNum
-	preAllocatedCap          = 1024
-	clearedPortion           = 100
-	maxClearedAttempt        = 5
+	partitionNum uint64 = 16
+
+	preAllocatedCap   = 1024
+	clearedPortion    = 100
+	maxClearedAttempt = 5
+	partitionMask     = 0xF
 )
 
 type expiredList struct {
@@ -126,8 +126,7 @@ func (o *partition) get(key uint64) ([]byte, error) {
 
 func (o *partition) clean(ctx context.Context) error {
 	var (
-		wg  errgroup.Group
-		now = time.Now()
+		wg errgroup.Group
 	)
 
 	wg.Go(func() error {
@@ -135,39 +134,45 @@ func (o *partition) clean(ctx context.Context) error {
 	})
 
 	wg.Go(func() error {
-		o.expired.Range(func(keys []uint64) bool {
-			select {
-			case <-ctx.Done():
-				return false
-			default:
-			}
-
-			prevK := uint64(0)
-
-			sort.Slice(keys, func(i, j int) bool {
-				return keys[i] < keys[j]
-			})
-
-			o.Lock()
-			defer o.Unlock()
-
-			for _, k := range keys {
-				if k != prevK {
-					if r, ok := o.data[k]; ok && r.expiration.Before(now) {
-						delete(o.data, k)
-					}
-				}
-
-				prevK = k
-			}
-
-			return true
-		})
-
-		return nil
+		return o.cleanDictionary(ctx)
 	})
 
 	return wg.Wait()
+}
+
+func (o *partition) cleanDictionary(ctx context.Context) error {
+	now := time.Now()
+
+	o.expired.Range(func(keys []uint64) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+
+		prevK := uint64(0)
+
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i] < keys[j]
+		})
+
+		o.Lock()
+		defer o.Unlock()
+
+		for _, k := range keys {
+			if k != prevK {
+				if r, ok := o.data[k]; ok && r.expiration.Before(now) {
+					delete(o.data, k)
+				}
+			}
+
+			prevK = k
+		}
+
+		return true
+	})
+
+	return nil
 }
 
 type PartitionedDictionary struct {
@@ -199,7 +204,7 @@ func (o *PartitionedDictionary) Get(key uint64) ([]byte, error) {
 }
 
 func chunkKey(key uint64) int {
-	return int(key / divider)
+	return int(key & partitionMask)
 }
 
 func (o *PartitionedDictionary) Clean(ctx context.Context) error {

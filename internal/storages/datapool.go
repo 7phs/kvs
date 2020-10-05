@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	dataChunkSz int = 1024 * 1024
+	dataChunkSz int = 1 * 1024 * 1024
 )
 
 type dataPool struct {
@@ -53,13 +53,13 @@ func (o *dataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
 		return buf, nil
 	}
 
-	buf, err := o.valuePool.Get()
+	bufP, err := o.valuePool.Get()
 	if err != nil {
 		return nil, err
 	}
 
 	nodeToClean := o.current
-	o.current = newAllocation(buf)
+	o.current = newAllocation(bufP)
 
 	go o.queueToClean.push(nodeToClean)
 
@@ -72,6 +72,8 @@ func (o *dataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
 }
 
 func (o *dataPool) Clean(ctx context.Context) error {
+	now := time.Now()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -79,12 +81,12 @@ func (o *dataPool) Clean(ctx context.Context) error {
 		default:
 		}
 
-		node, ok := o.queueToClean.pop()
+		node, ok := o.queueToClean.pop(now)
 		if !ok {
 			return nil
 		}
 
-		if len(node.buf) > 0 {
+		if node.buf != nil {
 			o.valuePool.Put(node.buf)
 			node.buf = nil
 		}

@@ -59,15 +59,16 @@ func (o *queueToClean) push(node allocation) {
 
 	if o.root == nil {
 		o.root = n
-		o.last = n
+		o.last = o.root
 
 		return
 	}
 
 	o.last.next = n
+	o.last = o.last.next
 }
 
-func (o *queueToClean) pop() (allocation, bool) {
+func (o *queueToClean) pop(now time.Time) (allocation, bool) {
 	o.Lock()
 	defer o.Unlock()
 
@@ -75,7 +76,7 @@ func (o *queueToClean) pop() (allocation, bool) {
 		return allocation{}, false
 	}
 
-	if o.root.expiration.After(time.Now()) {
+	if o.root.expiration.After(now) {
 		return allocation{}, false
 	}
 

@@ -23,6 +23,6 @@ end
 
 -- add a random string to the original request path.
 request = function()
-    local path = wrk.path .. getRandomString(2)
+    local path = wrk.path .. getRandomString(3)
     return wrk.format(wrk.method, path, wrk.headers, wrk.body)
 end
