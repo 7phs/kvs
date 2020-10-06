@@ -25,36 +25,33 @@ func NewMapDictionary() (*MapDictionary, error) {
 	}, nil
 }
 
-func (o *MapDictionary) Add(key uint64, value []byte, expiration time.Time) error {
-	value, err := o.pool.Copy(value, expiration)
+func (o *MapDictionary) Add(key uint64, data []byte, expiration time.Time) error {
+	buf, err := o.pool.Copy(data, expiration)
 	if err != nil {
 		return err
 	}
 
-	o.Store(key, record{
-		value:      value,
-		expiration: expiration,
-	})
+	o.Store(key, newRecord(buf, expiration))
 
 	return nil
 }
 
-func (o *MapDictionary) Get(key uint64) ([]byte, error) {
+func (o *MapDictionary) Get(key uint64) (Buffer, error) {
 	v, ok := o.Load(key)
 	if !ok {
-		return nil, ErrKeyNotFound
+		return Buffer{}, ErrKeyNotFound
 	}
 
 	rec, ok := v.(record)
 	if !ok {
-		return nil, ErrKeyNotFound
+		return Buffer{}, ErrKeyNotFound
 	}
 
-	if rec.expiration.Before(time.Now()) {
-		return nil, ErrKeyNotFound
+	if rec.isExpired() {
+		return Buffer{}, ErrKeyNotFound
 	}
 
-	return rec.value, nil
+	return rec.get(), nil
 }
 
 func (o *MapDictionary) Clean(ctx context.Context) error {
@@ -124,7 +121,7 @@ func (o *MapDictionary) cleanDictionary(ctx context.Context) error {
 			continue
 		}
 
-		rec.value = nil
+		rec.reset()
 	}
 
 	return nil

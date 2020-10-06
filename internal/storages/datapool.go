@@ -15,7 +15,7 @@ type dataPool struct {
 
 	valuePool *memoryPool
 
-	current      allocation
+	current      *allocation
 	queueToClean queueToClean
 }
 
@@ -33,18 +33,18 @@ func newDataPool() (*dataPool, error) {
 	}, nil
 }
 
-func (o *dataPool) Copy(data []byte, expiration time.Time) ([]byte, error) {
+func (o *dataPool) Copy(data []byte, expiration time.Time) (Buffer, error) {
 	valueBuf, err := o.allocate(len(data), expiration)
 	if err != nil {
-		return nil, err
+		return Buffer{}, err
 	}
 
-	copy(valueBuf, data)
+	valueBuf.Copy(data)
 
 	return valueBuf, nil
 }
 
-func (o *dataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
+func (o *dataPool) allocate(sz int, expiration time.Time) (Buffer, error) {
 	o.Lock()
 	defer o.Unlock()
 
@@ -55,7 +55,7 @@ func (o *dataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
 
 	bufP, err := o.valuePool.Get()
 	if err != nil {
-		return nil, err
+		return Buffer{}, err
 	}
 
 	nodeToClean := o.current
@@ -68,7 +68,7 @@ func (o *dataPool) allocate(sz int, expiration time.Time) ([]byte, error) {
 		return buf, nil
 	}
 
-	return nil, ErrOutOfLimit
+	return Buffer{}, ErrOutOfLimit
 }
 
 func (o *dataPool) Clean(ctx context.Context) error {

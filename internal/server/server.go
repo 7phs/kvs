@@ -63,8 +63,10 @@ func (o *DefaultServer) handler(ctx *fasthttp.RequestCtx) {
 			return
 		}
 
+		defer body.Free()
+
 		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBody(body)
+		ctx.SetBody(body.Bytes())
 
 	case http.MethodPost:
 		err := o.storages.Add(ctx.Path(), ctx.Request.Body())

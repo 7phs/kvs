@@ -15,13 +15,13 @@ var (
 type Storages interface {
 	ID() string
 	Add(key, body []byte) error
-	Get(key []byte) ([]byte, error)
+	Get(key []byte) (Buffer, error)
 	Clean(ctx context.Context) error
 }
 
 type DataDictionary interface {
 	Add(key uint64, data []byte, expiration time.Time) error
-	Get(key uint64) ([]byte, error)
+	Get(key uint64) (Buffer, error)
 	Clean(ctx context.Context) error
 }
 
@@ -52,7 +52,7 @@ func (o *InMemStorages) Add(key, body []byte) error {
 	return o.dataDict.Add(o.hash(key), body, expiration)
 }
 
-func (o *InMemStorages) Get(key []byte) ([]byte, error) {
+func (o *InMemStorages) Get(key []byte) (Buffer, error) {
 	return o.dataDict.Get(o.hash(key))
 }
 

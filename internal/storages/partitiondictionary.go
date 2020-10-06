@@ -63,11 +63,6 @@ func (o *expiredList) Range(fn func(keys []uint64) bool) {
 	}
 }
 
-type record struct {
-	value      []byte
-	expiration time.Time
-}
-
 type partition struct {
 	sync.RWMutex
 
@@ -89,8 +84,8 @@ func newPartition() (partition, error) {
 	}, nil
 }
 
-func (o *partition) add(key uint64, value []byte, expiration time.Time) error {
-	value, err := o.pool.Copy(value, expiration)
+func (o *partition) add(key uint64, data []byte, expiration time.Time) error {
+	buf, err := o.pool.Copy(data, expiration)
 	if err != nil {
 		return err
 	}
@@ -98,30 +93,27 @@ func (o *partition) add(key uint64, value []byte, expiration time.Time) error {
 	o.Lock()
 	defer o.Unlock()
 
-	o.data[key] = record{
-		value:      value,
-		expiration: expiration,
-	}
+	o.data[key] = newRecord(buf, expiration)
 
 	return nil
 }
 
-func (o *partition) get(key uint64) ([]byte, error) {
+func (o *partition) get(key uint64) (Buffer, error) {
 	o.RLock()
 	rec, ok := o.data[key]
 	o.RUnlock()
 
 	if !ok {
-		return nil, ErrKeyNotFound
+		return Buffer{}, ErrKeyNotFound
 	}
 
 	if rec.expiration.After(time.Now()) {
-		return rec.value, nil
+		return rec.get(), nil
 	}
 
 	go o.expired.pushToExpire(key)
 
-	return nil, ErrKeyNotFound
+	return Buffer{}, ErrKeyNotFound
 }
 
 func (o *partition) clean(ctx context.Context) error {
@@ -199,7 +191,7 @@ func (o *PartitionedDictionary) Add(key uint64, value []byte, expiration time.Ti
 	return o.partitions[chunkKey(key)].add(key, value, expiration)
 }
 
-func (o *PartitionedDictionary) Get(key uint64) ([]byte, error) {
+func (o *PartitionedDictionary) Get(key uint64) (Buffer, error) {
 	return o.partitions[chunkKey(key)].get(key)
 }
 

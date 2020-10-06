@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"runtime"
 	"sync"
 	"time"
 
@@ -30,7 +29,6 @@ func (o *GroupMaintenance) Start(ctx context.Context, interval time.Duration) {
 	var (
 		ticker = time.NewTicker(interval)
 		wg     sync.WaitGroup
-		index  = uint64(0)
 	)
 
 	for {
@@ -72,10 +70,5 @@ func (o *GroupMaintenance) Start(ctx context.Context, interval time.Duration) {
 		}
 
 		wg.Wait()
-
-		index++
-		if index%10 == 0 {
-			go runtime.GC()
-		}
 	}
 }
