@@ -57,7 +57,13 @@ func NewServer(
 func (o *DefaultServer) handler(ctx *fasthttp.RequestCtx) {
 	switch string(ctx.Method()) {
 	case http.MethodGet:
-		body, err := o.storages.Get(ctx.Path())
+		key := ctx.Path()
+
+		o.logger.Debug("handle GET",
+			zap.ByteString("key", key),
+		)
+
+		body, err := o.storages.Get(key)
 		if err != nil {
 			o.handlerError(ctx, err)
 			return
@@ -69,6 +75,12 @@ func (o *DefaultServer) handler(ctx *fasthttp.RequestCtx) {
 		ctx.SetBody(body.Bytes())
 
 	case http.MethodPost:
+		key := ctx.Path()
+
+		o.logger.Debug("handle POST",
+			zap.ByteString("key", key),
+		)
+
 		err := o.storages.Add(ctx.Path(), ctx.Request.Body())
 		if err != nil {
 			o.handlerError(ctx, err)

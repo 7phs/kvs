@@ -77,23 +77,23 @@ func (o *allocation) isExpired(now time.Time) bool {
 	return atomic.LoadInt64(&o.allocated) == 0 && !o.expiration.After(now)
 }
 
-type allocateInUse struct {
+type allocationInUse struct {
 	allocation *allocation
 
-	next *allocateInUse
+	next *allocationInUse
 }
 
-func newAllocationInUse(node *allocation) *allocateInUse {
-	return &allocateInUse{
+func newAllocationInUse(node *allocation) *allocationInUse {
+	return &allocationInUse{
 		allocation: node,
 	}
 }
 
-func (o *allocateInUse) IsExpired(now time.Time) bool {
+func (o *allocationInUse) IsExpired(now time.Time) bool {
 	return o.allocation.isExpired(now)
 }
 
-func (o *allocateInUse) Reset() (*allocation, *allocateInUse) {
+func (o *allocationInUse) Reset() (*allocation, *allocationInUse) {
 	allocation := o.allocation
 	next := o.next
 
@@ -106,8 +106,8 @@ func (o *allocateInUse) Reset() (*allocation, *allocateInUse) {
 type queueToClean struct {
 	sync.Mutex
 
-	root *allocateInUse
-	last *allocateInUse
+	root *allocationInUse
+	last *allocationInUse
 }
 
 func (o *queueToClean) push(node *allocation) {
@@ -131,20 +131,33 @@ func (o *queueToClean) pop(now time.Time) (*allocation, bool) {
 	o.Lock()
 	defer o.Unlock()
 
-	if o.root == nil {
-		return nil, false
+	var (
+		prev   *allocationInUse
+		cursor = o.root
+	)
+
+	for cursor != nil {
+		if cursor.IsExpired(now) {
+			allocation, next := cursor.Reset()
+
+			if prev != nil {
+				prev.next = next
+			} else {
+				o.root = next
+			}
+
+			if o.root == nil {
+				o.last = nil
+			}
+
+			return allocation, true
+		}
+
+		prev = cursor
+		cursor = cursor.next
 	}
 
-	if !o.root.IsExpired(now) {
-		return nil, false
-	}
+	prev = nil
 
-	allocation, next := o.root.Reset()
-
-	o.root = next
-	if o.root == nil {
-		o.last = nil
-	}
-
-	return allocation, true
+	return nil, false
 }

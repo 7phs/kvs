@@ -16,6 +16,29 @@ const (
 	errExitCode = 2
 )
 
+func initStorages(conf config.Config) (dictionary storages.DataDictionary, err error) {
+	switch conf.Mode() {
+	case config.StorageModeMap:
+		dictionary, err = storages.NewMapDictionary()
+	case config.StorageModeSyncMap:
+		dictionary, err = storages.NewSyncMapDictionary()
+	case config.StorageModePartitionedMap:
+		dictionary, err = storages.NewPartitionedDictionary(
+			storages.DefaultPartitionNum,
+			storages.DefaultPartitionMask,
+			storages.NewMapDictionary,
+		)
+	case config.StorageModePartitionedSyncMap:
+		dictionary, err = storages.NewPartitionedDictionary(
+			storages.DefaultPartitionNum,
+			storages.DefaultPartitionMask,
+			storages.NewSyncMapDictionary,
+		)
+	}
+
+	return
+}
+
 func main() {
 	conf, err := config.NewConfigFromEnv()
 	if err != nil {
@@ -37,18 +60,15 @@ func main() {
 		zap.Int(config.PORT, conf.Port()),
 		zap.Duration(config.EXPIRATION, conf.Expiration()),
 		zap.Duration(config.MAINTENANCE, conf.Maintenance()),
+		zap.String(config.MODE, string(conf.Mode())),
 	)
 
 	logger.Info("init: data dictionary")
 
-	dictionary, err := storages.NewPartitionedDictionary()
+	dictionary, err := initStorages(conf)
 	if err != nil {
 		logger.Fatal("failed to init data dictionary")
 	}
-	//dictionary, err := storages.NewMapDictionary()
-	//if err != nil {
-	//	logger.Fatal("failed to init data dictionary")
-	//}
 
 	logger.Info("init: storages")
 
