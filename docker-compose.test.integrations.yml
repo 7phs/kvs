@@ -1,0 +1,16 @@
+version: '2.3'
+
+networks:
+  backend:
+services:
+  test-integrations:
+    build: ./test/integrations
+    command: [ 'go', 'test', '-race', '-v', '-count=1', './tst/...', '-run', '${GOTESTS}' ]
+    depends_on:
+      - kvs
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      KVS: http://kvs:9889
+    init: true
+    networks:
+      - backend

@@ -98,6 +98,8 @@ func (o *DefaultServer) handlerError(ctx *fasthttp.RequestCtx, err error) {
 	switch err {
 	case storages.ErrKeyNotFound:
 		ctx.Error("Not found", fasthttp.StatusNotFound)
+	case storages.ErrOutOfLimit:
+		ctx.Error("Out of limit", fasthttp.StatusInsufficientStorage)
 	default:
 		ctx.Error("Internal error", fasthttp.StatusInternalServerError)
 	}
@@ -132,7 +134,9 @@ func (o *DefaultServer) Stop() {
 	wg.Go(func() error {
 		o.logger.Info("http: shutdown")
 
-		return o.server.Shutdown()
+		err := o.server.Shutdown()
+
+		return err
 	})
 
 	wg.Go(func() error {

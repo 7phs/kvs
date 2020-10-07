@@ -1,0 +1,15 @@
+version: '2.3'
+
+networks:
+  backend:
+services:
+  kvs:
+    build: .
+    command: ['./app/kvs']
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+    init: true
+    networks:
+      - backend
+    ports:
+      - '9889:9889'
