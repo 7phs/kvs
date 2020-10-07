@@ -7,6 +7,7 @@
 
 ## Benchmark (wrk)
 
+* MacBook Pro (15-inch, 2018); 2,6 GHz 6-Core Intel Core i7
 * Key: random
 * Key length: 3
 * Value length: 8 - 3000
