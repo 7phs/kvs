@@ -32,5 +32,4 @@ func TestMemoryPool_Put(t *testing.T) {
 	buf, err = pool.Get()
 	require.NoError(t, err)
 	assert.Len(t, buf, sz)
-	assert.Equal(t, v, buf[:len(v)])
 }

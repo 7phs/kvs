@@ -3,7 +3,7 @@ VERSION = latest
 
 .PHONY: build
 build:
-	go build -o ./bin/kvs ./cmd/kvs
+	go build --race -o ./bin/kvs ./cmd/kvs
 
 .PHONY: run
 run:
@@ -11,7 +11,7 @@ run:
 
 .PHONY: test
 test:
-	LOG_LEVEL=error go test ./...
+	LOG_LEVEL=error go test --race ./...
 
 .PHONY: test-integrations
 test-integrations:

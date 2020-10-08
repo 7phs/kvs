@@ -9,24 +9,13 @@ import (
 )
 
 var (
+	_ config.Config  = (*mockConfig)(nil)
 	_ refCounter     = (*mockRefCounter)(nil)
+	_ MemoryPool     = (*mockMemoryPool)(nil)
 	_ refCounter     = (*mockDataPool)(nil)
 	_ DataPool       = (*mockDataPool)(nil)
 	_ DataDictionary = (*mockDataDictionary)(nil)
-	_ config.Config  = (*mockConfig)(nil)
 )
-
-type mockRefCounter struct {
-	mock.Mock
-}
-
-func (m *mockRefCounter) BufferInUse() {
-	m.Called()
-}
-
-func (m *mockRefCounter) BufferFree() {
-	m.Called()
-}
 
 type constantTime time.Time
 
@@ -64,26 +53,30 @@ func (o *mockConfig) TimeSource() config.TimeSource {
 	return o.TimeS
 }
 
-type mockDataDictionary struct {
+type mockRefCounter struct {
 	mock.Mock
 }
 
-func (m *mockDataDictionary) Add(key uint64, data []byte, expiration time.Time) error {
-	args := m.Called(key, data, expiration)
-
-	return args.Error(0)
+func (m *mockRefCounter) BufferInUse() {
+	m.Called()
 }
 
-func (m *mockDataDictionary) Get(key uint64) (Buffer, error) {
-	args := m.Called(key)
-
-	return args.Get(0).(Buffer), args.Error(1)
+func (m *mockRefCounter) BufferFree() {
+	m.Called()
 }
 
-func (m *mockDataDictionary) Clean(ctx context.Context) error {
-	args := m.Called(ctx)
+type mockMemoryPool struct {
+	mock.Mock
+}
 
-	return args.Error(0)
+func (m *mockMemoryPool) Get() ([]byte, error) {
+	args := m.Called()
+
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func (m *mockMemoryPool) Put(d []byte) {
+	m.Called(d)
 }
 
 type mockDataPool struct {
@@ -105,6 +98,28 @@ func (m *mockDataPool) BufferFree() {
 }
 
 func (m *mockDataPool) Clean(ctx context.Context) error {
+	args := m.Called(ctx)
+
+	return args.Error(0)
+}
+
+type mockDataDictionary struct {
+	mock.Mock
+}
+
+func (m *mockDataDictionary) Add(key uint64, data []byte, expiration time.Time) error {
+	args := m.Called(key, data, expiration)
+
+	return args.Error(0)
+}
+
+func (m *mockDataDictionary) Get(key uint64) (Buffer, error) {
+	args := m.Called(key)
+
+	return args.Get(0).(Buffer), args.Error(1)
+}
+
+func (m *mockDataDictionary) Clean(ctx context.Context) error {
 	args := m.Called(ctx)
 
 	return args.Error(0)
