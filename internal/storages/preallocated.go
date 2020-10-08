@@ -1,6 +1,7 @@
 package storages
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -123,6 +124,9 @@ func (o *queueAllocations) pop(now time.Time) (*preAllocatedBuffer, bool) {
 				o.last = nil
 			}
 
+			cursor = nil
+			prev = nil
+
 			return allocation, true
 		}
 
@@ -135,7 +139,29 @@ func (o *queueAllocations) pop(now time.Time) (*preAllocatedBuffer, bool) {
 	return nil, false
 }
 
+//nolint:unused
+func (o *queueAllocations) dump(now time.Time) {
+	o.Lock()
+	defer o.Unlock()
+
+	fmt.Println(now)
+
+	for cursor := o.root; cursor != nil; cursor = cursor.next {
+		fmt.Print(
+			o.root.allocation.index, ";",
+			len(o.root.allocation.buf), ";",
+			o.root.allocation.expiration, ":",
+			atomic.LoadInt64(&o.root.allocation.allocated), ";",
+		)
+	}
+
+	fmt.Println()
+}
+
 func (o *queueAllocations) len() int {
+	o.Lock()
+	defer o.Unlock()
+
 	count := 0
 
 	for cursor := o.root; cursor != nil; cursor, count = cursor.next, count+inc {

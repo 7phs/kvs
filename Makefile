@@ -3,7 +3,7 @@ VERSION = latest
 
 .PHONY: build
 build:
-	go build --race -o ./bin/kvs ./cmd/kvs
+	go build -o ./bin/kvs ./cmd/kvs
 
 .PHONY: run
 run:

@@ -88,6 +88,7 @@ func (o *dataPool) Clean(ctx context.Context) error {
 		if node.buf != nil {
 			o.valuePool.Put(node.buf)
 			node.buf = nil
+			node = nil
 		}
 	}
 }
