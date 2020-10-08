@@ -1,16 +1,28 @@
-# (DRAFT) (One more in-memory) Key-Value Storages
+# (One more in-memory) Key-Value Storages
 
 * Hashed key
-* Pre-allocated buffer to store value
+* Pre-allocated buffer to store values
 * Cleaning dictionary and storages by scheduler
 * Different type of storages: map, sync-map, partitioned-map and partitioned-sync-map
 
-## Benchmark (wrk)
+## Run
+
+Environment vars:
+
+* **PORT** - number of port which a server listens. Default, 9889
+* **EXPIRATION** - time of key's expiration. Default, 30m
+* **MAINTENANCE** - interval of running scheduler to clean dictionary and storages. Default, 10m
+* **PREALLOCATED** - size of a pre-allocated buffer to store a values in bytes. Default, 1048576
+* **STORAGE_MODE** - mode of a dictionary storages. Supported: map, sync-map, partitioned-map and partitioned-sync-map. Default, partitioned-map
+
+## Benchmark (2 wrk running simultaneously = POST + GET)
 
 * MacBook Pro (15-inch, 2018); 2,6 GHz 6-Core Intel Core i7
 * Key: random
 * Key length: 3
 * Value length: 8 - 3000
+* EXPIRATION: 2s
+* MAINTENANCE: 10s
 
 ### map
 
