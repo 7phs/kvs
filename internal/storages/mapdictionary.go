@@ -10,48 +10,52 @@ import (
 )
 
 const (
-	preAllocatedCap   = 1024
-	clearedPortion    = 100
-	maxClearedAttempt = 5
+	preAllocatedCap    = 1024
+	clearedPortionSize = 100
+	maxClearedAttempt  = 5
 )
 
 type expiredList struct {
 	sync.Mutex
 
-	list         []uint64
-	clearedIndex int
+	list               []uint64
+	clearedIndex       int
+	clearedPartitionSz int
 }
 
-func newExpiredList(cap int) expiredList {
+func newExpiredList(cap, clearedPartitionSz int) expiredList {
 	return expiredList{
-		list: make([]uint64, 0, cap),
+		list:               make([]uint64, 0, cap),
+		clearedPartitionSz: clearedPartitionSz,
 	}
 }
 
-func (o *expiredList) pushToExpire(index ...uint64) {
+func (o *expiredList) push(index ...uint64) {
 	o.Lock()
 	defer o.Unlock()
 
 	o.list = append(o.list, index...)
 }
 
-func (o *expiredList) Range(fn func(keys []uint64) bool) {
+func (o *expiredList) Clean(fn func(keys []uint64) bool) {
 	o.Lock()
 	defer o.Unlock()
 
 	for i := 0; i < maxClearedAttempt; i++ {
-		limit := o.clearedIndex + clearedPortion
+		start := o.clearedIndex
+		limit := start + o.clearedPartitionSz
+
 		if limit > len(o.list) {
 			limit = len(o.list)
 		}
 
-		if !fn(o.list[o.clearedIndex:limit]) {
+		o.clearedIndex += o.clearedPartitionSz
+
+		if !fn(o.list[start:limit]) {
 			return
 		}
 
-		o.clearedIndex += clearedPortion
-
-		if o.clearedIndex > len(o.list) {
+		if o.clearedIndex >= len(o.list) {
 			o.clearedIndex = 0
 			o.list = o.list[:0]
 
@@ -63,22 +67,17 @@ func (o *expiredList) Range(fn func(keys []uint64) bool) {
 type MapDictionary struct {
 	sync.RWMutex
 
-	pool    *dataPool
+	pool    DataPool
 	data    map[uint64]record
 	expired expiredList
 }
 
-func NewMapDictionary() (DataDictionary, error) {
-	pool, err := newDataPool()
-	if err != nil {
-		return nil, err
-	}
-
+func NewMapDictionary(pool DataPool) DataDictionary {
 	return &MapDictionary{
 		pool:    pool,
 		data:    make(map[uint64]record, preAllocatedCap),
-		expired: newExpiredList(preAllocatedCap),
-	}, nil
+		expired: newExpiredList(preAllocatedCap, clearedPortionSize),
+	}
 }
 
 func (o *MapDictionary) Add(key uint64, data []byte, expiration time.Time) error {
@@ -104,13 +103,13 @@ func (o *MapDictionary) Get(key uint64) (Buffer, error) {
 		return Buffer{}, ErrKeyNotFound
 	}
 
-	if rec.expiration.After(time.Now()) {
+	if !rec.isExpired() {
 		return rec.get(), nil
 	}
 
-	go o.expired.pushToExpire(key)
+	go o.expired.push(key)
 
-	return Buffer{}, ErrKeyNotFound
+	return Buffer{}, ErrKeyExpired
 }
 
 func (o *MapDictionary) Clean(ctx context.Context) error {
@@ -132,7 +131,7 @@ func (o *MapDictionary) Clean(ctx context.Context) error {
 func (o *MapDictionary) cleanDictionary(ctx context.Context) error {
 	now := time.Now()
 
-	o.expired.Range(func(keys []uint64) bool {
+	o.expired.Clean(func(keys []uint64) bool {
 		select {
 		case <-ctx.Done():
 			return false

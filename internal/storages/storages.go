@@ -28,8 +28,9 @@ type DataDictionary interface {
 type InMemStorages struct {
 	dataDict DataDictionary
 
-	nonce   [32]byte
-	expired time.Duration
+	nonce      [32]byte
+	expired    time.Duration
+	timeSource config.TimeSource
 }
 
 func NewInMemStorages(
@@ -37,8 +38,9 @@ func NewInMemStorages(
 	dataDict DataDictionary,
 ) (Storages, error) {
 	return &InMemStorages{
-		dataDict: dataDict,
-		expired:  config.Expiration(),
+		dataDict:   dataDict,
+		expired:    config.Expiration(),
+		timeSource: config.TimeSource(),
 	}, nil
 }
 
@@ -47,7 +49,7 @@ func (o *InMemStorages) ID() string {
 }
 
 func (o *InMemStorages) Add(key, body []byte) error {
-	expiration := time.Now().Add(o.expired)
+	expiration := o.timeSource.Now().Add(o.expired)
 
 	return o.dataDict.Add(o.hash(key), body, expiration)
 }

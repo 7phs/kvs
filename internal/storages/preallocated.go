@@ -6,48 +6,24 @@ import (
 	"time"
 )
 
-type Buffer struct {
-	allocation *allocation
-	data       []byte
-}
+const (
+	inc = 1
+)
 
-func (o *Buffer) inUse() {
-	o.allocation.bufferInUse()
-}
-
-func (o *Buffer) Free() {
-	o.allocation.bufferFree()
-
-	o.Reset()
-}
-
-func (o *Buffer) Copy(data []byte) {
-	copy(o.data, data)
-}
-
-func (o *Buffer) Bytes() []byte {
-	return o.data
-}
-
-func (o *Buffer) Reset() {
-	o.allocation = nil
-	o.data = nil
-}
-
-type allocation struct {
+type preAllocatedBuffer struct {
 	expiration time.Time
 	index      int
 	allocated  int64
 	buf        []byte
 }
 
-func newAllocation(buf []byte) *allocation {
-	return &allocation{
+func newPreAllocatedBuffer(buf []byte) *preAllocatedBuffer {
+	return &preAllocatedBuffer{
 		buf: buf,
 	}
 }
 
-func (o *allocation) allocate(sz int, expiration time.Time) (Buffer, bool) {
+func (o *preAllocatedBuffer) allocate(sz int, expiration time.Time) (Buffer, bool) {
 	if o.index+sz >= len(o.buf) {
 		return Buffer{}, false
 	}
@@ -59,31 +35,28 @@ func (o *allocation) allocate(sz int, expiration time.Time) (Buffer, bool) {
 		o.expiration = expiration
 	}
 
-	return Buffer{
-		allocation: o,
-		data:       o.buf[index:o.index],
-	}, true
+	return newBuffer(o, o.buf[index:o.index]), true
 }
 
-func (o *allocation) bufferInUse() {
+func (o *preAllocatedBuffer) BufferInUse() {
 	atomic.AddInt64(&o.allocated, 1)
 }
 
-func (o *allocation) bufferFree() {
+func (o *preAllocatedBuffer) BufferFree() {
 	atomic.AddInt64(&o.allocated, -1)
 }
 
-func (o *allocation) isExpired(now time.Time) bool {
+func (o *preAllocatedBuffer) isExpired(now time.Time) bool {
 	return atomic.LoadInt64(&o.allocated) == 0 && !o.expiration.After(now)
 }
 
 type allocationInUse struct {
-	allocation *allocation
+	allocation *preAllocatedBuffer
 
 	next *allocationInUse
 }
 
-func newAllocationInUse(node *allocation) *allocationInUse {
+func newAllocationInUse(node *preAllocatedBuffer) *allocationInUse {
 	return &allocationInUse{
 		allocation: node,
 	}
@@ -93,7 +66,7 @@ func (o *allocationInUse) IsExpired(now time.Time) bool {
 	return o.allocation.isExpired(now)
 }
 
-func (o *allocationInUse) Reset() (*allocation, *allocationInUse) {
+func (o *allocationInUse) Reset() (*preAllocatedBuffer, *allocationInUse) {
 	allocation := o.allocation
 	next := o.next
 
@@ -103,14 +76,14 @@ func (o *allocationInUse) Reset() (*allocation, *allocationInUse) {
 	return allocation, next
 }
 
-type queueToClean struct {
+type queueAllocations struct {
 	sync.Mutex
 
 	root *allocationInUse
 	last *allocationInUse
 }
 
-func (o *queueToClean) push(node *allocation) {
+func (o *queueAllocations) push(node *preAllocatedBuffer) {
 	n := newAllocationInUse(node)
 
 	o.Lock()
@@ -127,7 +100,7 @@ func (o *queueToClean) push(node *allocation) {
 	o.last = o.last.next
 }
 
-func (o *queueToClean) pop(now time.Time) (*allocation, bool) {
+func (o *queueAllocations) pop(now time.Time) (*preAllocatedBuffer, bool) {
 	o.Lock()
 	defer o.Unlock()
 
@@ -160,4 +133,13 @@ func (o *queueToClean) pop(now time.Time) (*allocation, bool) {
 	prev = nil
 
 	return nil, false
+}
+
+func (o *queueAllocations) len() int {
+	count := 0
+
+	for cursor := o.root; cursor != nil; cursor, count = cursor.next, count+inc {
+	}
+
+	return count
 }

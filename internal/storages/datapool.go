@@ -6,30 +6,29 @@ import (
 	"time"
 )
 
-const (
-	dataChunkSz int = 1 * 1024 * 1024
-)
+type DataPool interface {
+	Copy(data []byte, expiration time.Time) (Buffer, error)
+	Clean(ctx context.Context) error
+}
 
 type dataPool struct {
 	sync.Mutex
 
-	valuePool *memoryPool
+	valuePool MemoryPool
 
-	current      *allocation
-	queueToClean queueToClean
+	current      *preAllocatedBuffer
+	queueToClean queueAllocations
 }
 
-func newDataPool() (*dataPool, error) {
-	valuePool := newMemoryPool(dataChunkSz)
-
-	buf, err := valuePool.Get()
+func NewDataPool(memPool MemoryPool) (DataPool, error) {
+	buf, err := memPool.Get()
 	if err != nil {
 		return nil, err
 	}
 
 	return &dataPool{
-		valuePool: valuePool,
-		current:   newAllocation(buf),
+		valuePool: memPool,
+		current:   newPreAllocatedBuffer(buf),
 	}, nil
 }
 
@@ -59,7 +58,7 @@ func (o *dataPool) allocate(sz int, expiration time.Time) (Buffer, error) {
 	}
 
 	nodeToClean := o.current
-	o.current = newAllocation(bufP)
+	o.current = newPreAllocatedBuffer(bufP)
 
 	go o.queueToClean.push(nodeToClean)
 

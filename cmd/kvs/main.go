@@ -16,23 +16,51 @@ const (
 	errExitCode = 2
 )
 
+func newMapDictionary(conf config.Config) (storages.DataDictionary, error) {
+	memoryPool := storages.NewMemoryPool(conf.PreAllocated())
+
+	pool, err := storages.NewDataPool(memoryPool)
+	if err != nil {
+		return nil, err
+	}
+
+	return storages.NewMapDictionary(pool), nil
+}
+
+func newSyncMapDictionary(conf config.Config) (storages.DataDictionary, error) {
+	memoryPool := storages.NewMemoryPool(conf.PreAllocated())
+
+	pool, err := storages.NewDataPool(memoryPool)
+	if err != nil {
+		return nil, err
+	}
+
+	return storages.NewSyncMapDictionary(pool), nil
+}
+
 func initStorages(conf config.Config) (dictionary storages.DataDictionary, err error) {
 	switch conf.Mode() {
 	case config.StorageModeMap:
-		dictionary, err = storages.NewMapDictionary()
+		return newMapDictionary(conf)
+
 	case config.StorageModeSyncMap:
-		dictionary, err = storages.NewSyncMapDictionary()
+		return newSyncMapDictionary(conf)
+
 	case config.StorageModePartitionedMap:
-		dictionary, err = storages.NewPartitionedDictionary(
+		return storages.NewPartitionedDictionary(
 			storages.DefaultPartitionNum,
 			storages.DefaultPartitionMask,
-			storages.NewMapDictionary,
+			func() (storages.DataDictionary, error) {
+				return newMapDictionary(conf)
+			},
 		)
 	case config.StorageModePartitionedSyncMap:
-		dictionary, err = storages.NewPartitionedDictionary(
+		return storages.NewPartitionedDictionary(
 			storages.DefaultPartitionNum,
 			storages.DefaultPartitionMask,
-			storages.NewSyncMapDictionary,
+			func() (storages.DataDictionary, error) {
+				return newSyncMapDictionary(conf)
+			},
 		)
 	}
 
@@ -60,6 +88,7 @@ func main() {
 		zap.Int(config.PORT, conf.Port()),
 		zap.Duration(config.EXPIRATION, conf.Expiration()),
 		zap.Duration(config.MAINTENANCE, conf.Maintenance()),
+		zap.Int(config.PREALLOCATED, conf.PreAllocated()),
 		zap.String(config.MODE, string(conf.Mode())),
 	)
 

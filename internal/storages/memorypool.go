@@ -4,11 +4,20 @@ import (
 	"sync"
 )
 
+var (
+	_ MemoryPool = (*memoryPool)(nil)
+)
+
+type MemoryPool interface {
+	Get() ([]byte, error)
+	Put(d []byte)
+}
+
 type memoryPool struct {
 	sync.Pool
 }
 
-func newMemoryPool(sz int) *memoryPool {
+func NewMemoryPool(sz int) MemoryPool {
 	return &memoryPool{
 		Pool: sync.Pool{
 			New: func() interface{} {

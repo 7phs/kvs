@@ -96,7 +96,8 @@ func (o *DefaultServer) handler(ctx *fasthttp.RequestCtx) {
 
 func (o *DefaultServer) handlerError(ctx *fasthttp.RequestCtx, err error) {
 	switch err {
-	case storages.ErrKeyNotFound:
+	case storages.ErrKeyNotFound,
+		storages.ErrKeyExpired:
 		ctx.Error("Not found", fasthttp.StatusNotFound)
 	case storages.ErrOutOfLimit:
 		ctx.Error("Out of limit", fasthttp.StatusInsufficientStorage)

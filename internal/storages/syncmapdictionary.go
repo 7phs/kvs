@@ -11,18 +11,13 @@ import (
 type SyncMapDictionary struct {
 	sync.Map
 
-	pool *dataPool
+	pool DataPool
 }
 
-func NewSyncMapDictionary() (DataDictionary, error) {
-	pool, err := newDataPool()
-	if err != nil {
-		return nil, err
-	}
-
+func NewSyncMapDictionary(pool DataPool) DataDictionary {
 	return &SyncMapDictionary{
 		pool: pool,
-	}, nil
+	}
 }
 
 func (o *SyncMapDictionary) Add(key uint64, data []byte, expiration time.Time) error {
@@ -48,7 +43,7 @@ func (o *SyncMapDictionary) Get(key uint64) (Buffer, error) {
 	}
 
 	if rec.isExpired() {
-		return Buffer{}, ErrKeyNotFound
+		return Buffer{}, ErrKeyExpired
 	}
 
 	return rec.get(), nil

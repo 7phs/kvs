@@ -7,15 +7,17 @@ import (
 )
 
 const (
-	PORT        = "PORT"
-	EXPIRATION  = "EXPIRATION"
-	MAINTENANCE = "MAINTENANCE"
-	MODE        = "STORAGE_MODE"
+	PORT         = "PORT"
+	EXPIRATION   = "EXPIRATION"
+	MAINTENANCE  = "MAINTENANCE"
+	PREALLOCATED = "PREALLOCATED"
+	MODE         = "STORAGE_MODE"
 
-	defaultPort        = 9889
-	defaultExpiration  = 30 * time.Minute
-	defaultMaintenance = 10 * time.Minute
-	defaultStorageMode = StorageModePartitionedMap
+	defaultPort         = 9889
+	defaultExpiration   = 30 * time.Minute
+	defaultMaintenance  = 10 * time.Minute
+	defaultPreAllocated = 1024 * 1024
+	defaultStorageMode  = StorageModePartitionedMap
 )
 
 const (
@@ -27,11 +29,23 @@ const (
 
 type StorageMode string
 
+type TimeSource interface {
+	Now() time.Time
+}
+
+type systemTime struct{}
+
+func (systemTime) Now() time.Time {
+	return time.Now()
+}
+
 type Config interface {
 	Port() int
 	Expiration() time.Duration
 	Maintenance() time.Duration
 	Mode() StorageMode
+	PreAllocated() int
+	TimeSource() TimeSource
 }
 
 type EnvConfig struct {
@@ -39,6 +53,8 @@ type EnvConfig struct {
 	expiration  time.Duration
 	maintenance time.Duration
 	mode        StorageMode
+	preAllocted int
+	timeSource  TimeSource
 }
 
 func NewConfigFromEnv() (Config, error) {
@@ -57,11 +73,18 @@ func NewConfigFromEnv() (Config, error) {
 		return nil, err
 	}
 
+	preAllocated, err := getIntOr(PREALLOCATED, defaultPreAllocated)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EnvConfig{
 		port:        port,
 		expiration:  expiration,
 		maintenance: maintenance,
 		mode:        parseMode(),
+		preAllocted: preAllocated,
+		timeSource:  systemTime{},
 	}, nil
 }
 
@@ -79,6 +102,14 @@ func (o *EnvConfig) Maintenance() time.Duration {
 
 func (o *EnvConfig) Mode() StorageMode {
 	return o.mode
+}
+
+func (o *EnvConfig) PreAllocated() int {
+	return o.preAllocted
+}
+
+func (o *EnvConfig) TimeSource() TimeSource {
+	return o.timeSource
 }
 
 func getIntOr(key string, defV int) (int, error) {
