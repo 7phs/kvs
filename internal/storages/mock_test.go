@@ -29,6 +29,10 @@ type mockConfig struct {
 	PreAlloc int
 }
 
+func (o *mockConfig) LogLevel() config.LogLevel {
+	return config.LogLevelInfo
+}
+
 func (o *mockConfig) Port() int {
 	return 0
 }

@@ -10,11 +10,38 @@ import (
 	"github.com/7phs/kvs/internal/server"
 	"github.com/7phs/kvs/internal/storages"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
 	errExitCode = 2
 )
+
+func logLevel(conf config.Config) zap.AtomicLevel {
+	var level zapcore.Level
+
+	switch conf.LogLevel() {
+	case config.LogLevelDebug:
+		level = zapcore.DebugLevel
+	case config.LogLevelInfo:
+		level = zapcore.InfoLevel
+	case config.LogLevelWarning:
+		level = zapcore.WarnLevel
+	case config.LogLevelError:
+		level = zapcore.ErrorLevel
+	default:
+		level = zapcore.InfoLevel
+	}
+
+	return zap.NewAtomicLevelAt(level)
+}
+
+func buildLogger(conf config.Config) (*zap.Logger, error) {
+	logConfig := zap.NewProductionConfig()
+	logConfig.Level = logLevel(conf)
+
+	return logConfig.Build()
+}
 
 func newMapDictionary(conf config.Config) (storages.DataDictionary, error) {
 	memoryPool := storages.NewMemoryPool(conf.PreAllocated())
@@ -73,7 +100,7 @@ func main() {
 		log.Fatal("failed to prepare config: %w", err)
 	}
 
-	logger, err := zap.NewProduction() // TODO: setup log level
+	logger, err := buildLogger(conf)
 	if err != nil {
 		log.Fatal("failed to init logger: %w", err)
 	}
@@ -85,6 +112,7 @@ func main() {
 	logger.Info("APP RUN")
 
 	logger.Info("config",
+		zap.String(config.LOGLEVEL, string(conf.LogLevel())),
 		zap.Int(config.PORT, conf.Port()),
 		zap.Duration(config.EXPIRATION, conf.Expiration()),
 		zap.Duration(config.MAINTENANCE, conf.Maintenance()),

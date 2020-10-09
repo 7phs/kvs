@@ -3,16 +3,19 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
+	LOGLEVEL     = "LOG_LEVEL"
 	PORT         = "PORT"
 	EXPIRATION   = "EXPIRATION"
 	MAINTENANCE  = "MAINTENANCE"
 	PREALLOCATED = "PREALLOCATED"
 	MODE         = "STORAGE_MODE"
 
+	defaultLogLevel     = LogLevelInfo
 	defaultPort         = 9889
 	defaultExpiration   = 30 * time.Minute
 	defaultMaintenance  = 10 * time.Minute
@@ -27,7 +30,16 @@ const (
 	StorageModePartitionedSyncMap StorageMode = "partitioned-sync-map"
 )
 
+const (
+	LogLevelDebug   LogLevel = "DEBUG"
+	LogLevelInfo    LogLevel = "INFO"
+	LogLevelWarning LogLevel = "WARNING"
+	LogLevelError   LogLevel = "ERROR"
+)
+
 type StorageMode string
+
+type LogLevel string
 
 type TimeSource interface {
 	Now() time.Time
@@ -40,6 +52,7 @@ func (systemTime) Now() time.Time {
 }
 
 type Config interface {
+	LogLevel() LogLevel
 	Port() int
 	Expiration() time.Duration
 	Maintenance() time.Duration
@@ -49,6 +62,7 @@ type Config interface {
 }
 
 type EnvConfig struct {
+	logLevel    LogLevel
 	port        int
 	expiration  time.Duration
 	maintenance time.Duration
@@ -79,6 +93,7 @@ func NewConfigFromEnv() (Config, error) {
 	}
 
 	return &EnvConfig{
+		logLevel:    parseLogLevel(),
 		port:        port,
 		expiration:  expiration,
 		maintenance: maintenance,
@@ -86,6 +101,10 @@ func NewConfigFromEnv() (Config, error) {
 		preAllocted: preAllocated,
 		timeSource:  systemTime{},
 	}, nil
+}
+
+func (o *EnvConfig) LogLevel() LogLevel {
+	return o.logLevel
 }
 
 func (o *EnvConfig) Port() int {
@@ -137,6 +156,20 @@ func getStringOr(key string, defV string) string {
 	}
 
 	return v
+}
+
+func parseLogLevel() LogLevel {
+	level := LogLevel(strings.ToUpper(getStringOr(LOGLEVEL, string(defaultLogLevel))))
+
+	switch level {
+	case LogLevelDebug,
+		LogLevelInfo,
+		LogLevelWarning,
+		LogLevelError:
+		return level
+	default:
+		return defaultLogLevel
+	}
 }
 
 func parseMode() StorageMode {

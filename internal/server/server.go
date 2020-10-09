@@ -33,6 +33,7 @@ type DefaultServer struct {
 
 func NewServer(
 	logger *zap.Logger,
+
 	conf config.Config,
 	storages storages.Storages,
 ) Server {
@@ -49,7 +50,12 @@ func NewServer(
 
 		maintenance: NewGroupMaintenance(logger, storages),
 	}
-	srv.server.Handler = srv.handler
+
+	if conf.LogLevel() == config.LogLevelDebug {
+		srv.server.Handler = NewLoggerHandler(logger, srv.handler)
+	} else {
+		srv.server.Handler = srv.handler
+	}
 
 	return srv
 }
@@ -57,13 +63,7 @@ func NewServer(
 func (o *DefaultServer) handler(ctx *fasthttp.RequestCtx) {
 	switch string(ctx.Method()) {
 	case http.MethodGet:
-		key := ctx.Path()
-
-		o.logger.Debug("handle GET",
-			zap.ByteString("key", key),
-		)
-
-		body, err := o.storages.Get(key)
+		body, err := o.storages.Get(ctx.Path())
 		if err != nil {
 			o.handlerError(ctx, err)
 			return
@@ -75,12 +75,6 @@ func (o *DefaultServer) handler(ctx *fasthttp.RequestCtx) {
 		ctx.SetBody(body.Bytes())
 
 	case http.MethodPost:
-		key := ctx.Path()
-
-		o.logger.Debug("handle POST",
-			zap.ByteString("key", key),
-		)
-
 		err := o.storages.Add(ctx.Path(), ctx.Request.Body())
 		if err != nil {
 			o.handlerError(ctx, err)
@@ -107,12 +101,13 @@ func (o *DefaultServer) handlerError(ctx *fasthttp.RequestCtx, err error) {
 }
 
 func (o *DefaultServer) Start() error {
-	var wg errgroup.Group
+	wg, ctx := errgroup.WithContext(o.cancelCtx)
 
 	wg.Go(func() error {
 		o.logger.Info("maintenance: start")
 
-		o.maintenance.Start(o.cancelCtx, o.maintenanceInterval)
+		o.maintenance.Start(ctx, o.maintenanceInterval)
+
 		return nil
 	})
 
@@ -140,15 +135,12 @@ func (o *DefaultServer) Stop() {
 		return err
 	})
 
-	wg.Go(func() error {
-		o.logger.Info("maintenance: shutdown")
+	o.logger.Info("maintenance: shutdown")
 
-		o.cancel()
-
-		return nil
-	})
+	o.cancel()
 
 	err := wg.Wait()
+
 	if err != nil {
 		o.logger.Error("failed to stop server",
 			zap.Error(err),

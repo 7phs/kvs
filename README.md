@@ -9,6 +9,7 @@
 
 Environment vars:
 
+* **LOG_LEVEL** - level of logging. Supported: DEBUG, INFO, WARNING. ERROR. Default, INFO
 * **PORT** - number of port which a server listens. Default, 9889
 * **EXPIRATION** - time of key's expiration. Default, 30m
 * **MAINTENANCE** - interval of running scheduler to clean dictionary and storages. Default, 10m
